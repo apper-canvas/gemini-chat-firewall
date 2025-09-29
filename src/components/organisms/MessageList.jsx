@@ -47,10 +47,10 @@ const MessageList = ({ messages, isLoading }) => {
         initial="initial"
         animate="animate"
       >
-        <AnimatePresence mode="popLayout">
-          {messages.map((message) => (
+<AnimatePresence mode="popLayout">
+          {messages.map((message, index) => (
             <motion.div
-              key={message.id}
+              key={message?.id || message?.timestamp || `message-${index}-${Date.now()}`}
               layout
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
