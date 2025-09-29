@@ -64,10 +64,11 @@ const ChatPage = () => {
       // Save AI message
       await chatService.saveMessage(aiMessage);
       
-    } catch (err) {
-      setError("Failed to get AI response. Please try again.");
+} catch (err) {
+      const errorMessage = err.message || "Failed to get AI response. Please try again.";
+      setError(errorMessage);
       console.error("Send message error:", err);
-      toast.error("Failed to send message");
+      toast.error(errorMessage.length > 50 ? "Failed to send message" : errorMessage);
     } finally {
       setIsLoading(false);
     }

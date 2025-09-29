@@ -59,15 +59,14 @@ async sendMessage(userMessage) {
       const apperClient = new ApperClient({
         apperProjectId: import.meta.env.VITE_APPER_PROJECT_ID,
         apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
-      });
+});
 
-const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
+      const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
         body: JSON.stringify({ message: userMessage }),
         headers: {
           'Content-Type': 'application/json'
         }
       });
-
       const responseData = await result.json();
 
       if (!responseData.success) {
@@ -76,12 +75,20 @@ const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CH
       }
 
       return responseData.response;
-    } catch (error) {
+} catch (error) {
       console.info(`apper_info: An error was received in this function: ${import.meta.env.VITE_GEMINI_CHAT}. The error is: ${error.message}`);
-      // Preserve original error details for debugging while providing user-friendly message
-      const errorMessage = error.message?.includes('ApperSDK') ? 
-        "Chat service is currently unavailable" : 
-        "Failed to get AI response from Gemini";
+      
+      // Enhanced error handling with more specific messages
+      let errorMessage = "Failed to get AI response from Gemini";
+      
+      if (error.message?.includes('ApperSDK')) {
+        errorMessage = "Chat service is currently unavailable";
+      } else if (error.message?.includes('fetch')) {
+        errorMessage = "Network connection error. Please check your internet connection.";
+      } else if (error.message?.includes('API key')) {
+        errorMessage = "AI service configuration error. Please try again later.";
+      }
+      
       throw new Error(errorMessage);
     }
   }
