@@ -64,18 +64,43 @@ async sendMessage(userMessage) {
         apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
       });
 
-      const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
+const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
         body: JSON.stringify({ message: userMessage }),
         headers: {
           'Content-Type': 'application/json'
         }
       });
       
-      const responseData = await result.json();
+      // ApperSDK returns data directly, not a Response object with .json() method
+      let responseData;
+      
+      // Handle different response formats defensively
+      if (result && typeof result === 'object') {
+        responseData = result;
+      } else if (typeof result === 'string') {
+        try {
+          responseData = JSON.parse(result);
+        } catch (parseError) {
+          console.error('Failed to parse response as JSON:', parseError);
+          throw new Error("Invalid response format from AI service");
+        }
+      } else {
+        throw new Error("Unexpected response format from AI service");
+      }
+
+      // Validate response structure
+      if (!responseData || typeof responseData !== 'object') {
+        console.info(`apper_info: Invalid response structure from function: ${import.meta.env.VITE_GEMINI_CHAT}. Response: ${JSON.stringify(responseData)}.`);
+        throw new Error("Invalid response from AI service");
+      }
 
       if (!responseData.success) {
         console.info(`apper_info: An error was received in this function: ${import.meta.env.VITE_GEMINI_CHAT}. The response body is: ${JSON.stringify(responseData)}.`);
         throw new Error(responseData.error || "Failed to get AI response");
+      }
+
+      if (!responseData.response) {
+        throw new Error("No response content received from AI service");
       }
 
       return responseData.response;
@@ -95,6 +120,8 @@ async sendMessage(userMessage) {
         errorMessage = "Too many requests. Please wait a moment and try again.";
       } else if (error.message?.includes('500') || error.message?.includes('server')) {
         errorMessage = "AI service is experiencing issues. Please try again in a few minutes.";
+      } else if (error.message?.includes('Invalid response') || error.message?.includes('parse')) {
+        errorMessage = "AI service returned an invalid response. Please try again.";
       } else if (error.message && !error.message.includes('Failed to get AI response')) {
         errorMessage = error.message; // Use specific error from edge function
       }
