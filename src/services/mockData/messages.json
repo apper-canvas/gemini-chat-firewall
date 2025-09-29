@@ -1,0 +1,20 @@
+[
+  {
+    "Id": 1,
+    "content": "Hello! How can I help you today?",
+    "sender": "ai",
+    "timestamp": "2024-01-15T10:00:00Z"
+  },
+  {
+    "Id": 2,
+    "content": "Can you explain what machine learning is?",
+    "sender": "user",
+    "timestamp": "2024-01-15T10:01:00Z"
+  },
+  {
+    "Id": 3,
+    "content": "Machine learning is a subset of artificial intelligence that enables computers to learn and improve from experience without being explicitly programmed. It involves algorithms that can identify patterns in data and make predictions or decisions based on that information.",
+    "sender": "ai",
+    "timestamp": "2024-01-15T10:01:30Z"
+  }
+]
