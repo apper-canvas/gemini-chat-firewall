@@ -61,7 +61,7 @@ async sendMessage(userMessage) {
         apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
       });
 
-      const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT_FUNCTION, {
+const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
         body: JSON.stringify({ message: userMessage }),
         headers: {
           'Content-Type': 'application/json'
@@ -71,14 +71,18 @@ async sendMessage(userMessage) {
       const responseData = await result.json();
 
       if (!responseData.success) {
-        console.info(`apper_info: An error was received in this function: ${import.meta.env.VITE_GEMINI_CHAT_FUNCTION}. The response body is: ${JSON.stringify(responseData)}.`);
+        console.info(`apper_info: An error was received in this function: ${import.meta.env.VITE_GEMINI_CHAT}. The response body is: ${JSON.stringify(responseData)}.`);
         throw new Error(responseData.error || "Failed to get AI response");
       }
 
       return responseData.response;
     } catch (error) {
-      console.info(`apper_info: An error was received in this function: ${import.meta.env.VITE_GEMINI_CHAT_FUNCTION}. The error is: ${error.message}`);
-      throw new Error("Failed to get AI response from Gemini");
+      console.info(`apper_info: An error was received in this function: ${import.meta.env.VITE_GEMINI_CHAT}. The error is: ${error.message}`);
+      // Preserve original error details for debugging while providing user-friendly message
+      const errorMessage = error.message?.includes('ApperSDK') ? 
+        "Chat service is currently unavailable" : 
+        "Failed to get AI response from Gemini";
+      throw new Error(errorMessage);
     }
   }
 
