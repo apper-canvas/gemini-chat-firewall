@@ -68,7 +68,10 @@ const ChatPage = () => {
       const errorMessage = err.message || "Failed to get AI response. Please try again.";
       setError(errorMessage);
       console.error("Send message error:", err);
-      toast.error(errorMessage.length > 50 ? "Failed to send message" : errorMessage);
+      
+      // Show appropriate toast message based on error length and content
+      const toastMessage = errorMessage.length > 60 ? "Failed to send message" : errorMessage;
+      toast.error(toastMessage);
     } finally {
       setIsLoading(false);
     }

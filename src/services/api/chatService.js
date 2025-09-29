@@ -50,16 +50,19 @@ class ChatService {
 
 async sendMessage(userMessage) {
     try {
+      // Wait for ApperSDK to be ready with timeout
+      await this.waitForApperSDK();
+      
       const { ApperClient } = window.ApperSDK;
       
       if (!ApperClient) {
-        throw new Error("ApperSDK not loaded");
+        throw new Error("ApperSDK failed to initialize");
       }
 
       const apperClient = new ApperClient({
         apperProjectId: import.meta.env.VITE_APPER_PROJECT_ID,
         apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
-});
+      });
 
       const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
         body: JSON.stringify({ message: userMessage }),
@@ -67,6 +70,7 @@ async sendMessage(userMessage) {
           'Content-Type': 'application/json'
         }
       });
+      
       const responseData = await result.json();
 
       if (!responseData.success) {
@@ -75,22 +79,44 @@ async sendMessage(userMessage) {
       }
 
       return responseData.response;
-} catch (error) {
+    } catch (error) {
       console.info(`apper_info: An error was received in this function: ${import.meta.env.VITE_GEMINI_CHAT}. The error is: ${error.message}`);
       
-      // Enhanced error handling with more specific messages
-      let errorMessage = "Failed to get AI response from Gemini";
+      // Enhanced error handling with specific user-friendly messages
+      let errorMessage = "Unable to get AI response. Please try again.";
       
       if (error.message?.includes('ApperSDK')) {
-        errorMessage = "Chat service is currently unavailable";
-      } else if (error.message?.includes('fetch')) {
-        errorMessage = "Network connection error. Please check your internet connection.";
-      } else if (error.message?.includes('API key')) {
-        errorMessage = "AI service configuration error. Please try again later.";
+        errorMessage = "Chat service is loading. Please wait a moment and try again.";
+      } else if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('connect')) {
+        errorMessage = "Connection issue. Please check your internet and try again.";
+      } else if (error.message?.includes('API key') || error.message?.includes('401')) {
+        errorMessage = "AI service temporarily unavailable. Please try again later.";
+      } else if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+        errorMessage = "Too many requests. Please wait a moment and try again.";
+      } else if (error.message?.includes('500') || error.message?.includes('server')) {
+        errorMessage = "AI service is experiencing issues. Please try again in a few minutes.";
+      } else if (error.message && !error.message.includes('Failed to get AI response')) {
+        errorMessage = error.message; // Use specific error from edge function
       }
       
       throw new Error(errorMessage);
     }
+  }
+
+  // Helper method to wait for ApperSDK to be ready
+  async waitForApperSDK(timeout = 10000) {
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < timeout) {
+      if (window.ApperSDK?.ApperClient) {
+        return;
+      }
+      
+      // Wait 100ms before checking again
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    throw new Error("ApperSDK failed to load within timeout period");
   }
 
   async clearChat() {
