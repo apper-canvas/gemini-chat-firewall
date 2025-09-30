@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
 import ChatHeader from "@/components/organisms/ChatHeader";
 import MessageList from "@/components/organisms/MessageList";
 import MessageInput from "@/components/molecules/MessageInput";
-import Loading from "@/components/ui/Loading";
 import Error from "@/components/ui/Error";
+import Loading from "@/components/ui/Loading";
 import chatService from "@/services/api/chatService";
 
 const ChatPage = () => {
@@ -90,46 +90,31 @@ const handleSendMessage = async (content) => {
       // Save final AI message
       await chatService.saveMessage(finalAiMessage);
       
-} catch (err) {
-      const errorMessage = err.message || "Failed to get AI response. Please try again.";
+    } catch (err) {
+      console.error("Chat error:", err);
+      
+      // Remove the failed AI message if it exists
+      setMessages(prev => prev.filter(msg => msg.id !== (Date.now() + 1).toString()));
+      
+      // Check if this is an empty response error (retryable)
+      const isEmptyResponse = err.message?.includes("Empty response");
+      const isRetryableError = 
+        isEmptyResponse ||
+        err.message?.includes("timeout") ||
+        err.message?.includes("network") ||
+        err.message?.includes("503");
+      
+      const errorMessage = err.message || "Failed to send message";
       setError(errorMessage);
-      console.error("Send message error:", err);
       
-      // Remove the placeholder AI message on error
-      setMessages(prev => prev.filter(msg => !(msg.sender === "ai" && msg.content === "")));
-      
-      // Enhanced error categorization with specific user guidance
-      const isConnectionError = err.message?.includes('internet') || 
-                               err.message?.includes('connection') ||
-                               err.message?.includes('check your connection') ||
-                               err.message?.includes('slow or unstable');
-      
-      const isNetworkError = err.message?.includes('network') || 
-                            err.message?.includes('fetch') ||
-                            err.message?.includes('Network Error');
-      
-      const isTimeoutError = err.message?.includes('timeout') ||
-                            err.message?.includes('timed out');
-      
-      const isServiceError = err.message?.includes('busy') ||
-                            err.message?.includes('loading') ||
-                            err.message?.includes('temporarily unavailable') ||
-                            err.message?.includes('rate limit');
-      
-      const isRetryableError = isConnectionError || isNetworkError || isTimeoutError || isServiceError ||
-                              err.message?.includes('Tried') ||
-                              err.message?.includes('Stream') ||
-                              err.message?.includes('500') ||
-                              err.message?.includes('502') ||
-                              err.message?.includes('503');
+      // Show more helpful error message for retryable errors
       if (isRetryableError) {
-        // Add a retry button to the toast for retryable errors
         toast.error(
           <div>
-            <div>{errorMessage}</div>
+            <div>{isEmptyResponse ? "The AI service returned an empty response. This sometimes happens - please try again." : errorMessage}</div>
             <button 
               onClick={() => {
-                toast.dismiss(); // Close current toast
+                toast.dismiss();
                 handleSendMessage(content);
               }}
               className="mt-2 text-sm underline hover:no-underline focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 rounded px-2 py-1"
@@ -143,11 +128,7 @@ const handleSendMessage = async (content) => {
           }
         );
       } else {
-        // Show appropriate toast message for non-retryable errors
-        const toastMessage = errorMessage.length > 80 ? 
-          "AI service error. Please try again later." : 
-          errorMessage;
-        toast.error(toastMessage, {
+        toast.error(errorMessage.length > 80 ? "AI service error. Please try again later." : errorMessage, {
           autoClose: 5000
         });
       }
@@ -157,21 +138,27 @@ const handleSendMessage = async (content) => {
     }
   };
 
-  const handleClearChat = async () => {
+const handleClearChat = async () => {
     try {
       await chatService.clearChat();
       setMessages([]);
       setError("");
+      toast.success("Chat cleared successfully");
     } catch (err) {
+      console.error("Failed to clear chat:", err);
       setError("Failed to clear chat");
-      console.error("Clear chat error:", err);
       toast.error("Failed to clear chat");
     }
   };
 
   const handleRetry = () => {
     setError("");
-    loadChatHistory();
+    const lastUserMessage = messages.filter(m => m.sender === 'user').pop();
+    if (lastUserMessage) {
+      handleSendMessage(lastUserMessage.content);
+    } else {
+      loadChatHistory();
+    }
   };
 
   if (initialLoading) {
@@ -181,6 +168,7 @@ const handleSendMessage = async (content) => {
   if (error && messages.length === 0) {
     return <Error message={error} onRetry={handleRetry} />;
   }
+
 
   return (
     <motion.div 
@@ -212,8 +200,8 @@ const handleSendMessage = async (content) => {
         </motion.div>
       )}
 
-      <MessageList 
-messages={messages} 
+<MessageList 
+        messages={messages} 
         isLoading={isLoading}
         isStreaming={isStreaming}
       />

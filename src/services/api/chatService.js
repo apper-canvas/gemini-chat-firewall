@@ -257,12 +257,13 @@ async handleStreamingResponse(response, onStream) {
           const lines = chunk.split('\n');
 
           for (const line of lines) {
+for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const dataStr = line.slice(6).trim();
                 if (!dataStr) continue;
-
-                const data = JSON.parse(dataStr);
+                
+                const data = JSON.parse(line.slice(6));
                 hasReceivedData = true;
                 
                 if (data.success === false) {
@@ -287,6 +288,13 @@ async handleStreamingResponse(response, onStream) {
                 // Handle completion signals
                 if (data.complete || data.success === true) {
                   clearTimeout(streamTimeout);
+                  
+                  // Validate that we actually received text content
+                  if (!accumulatedText || !accumulatedText.trim()) {
+                    reject(new Error("Empty response from AI service. Please try again."));
+                    return;
+                  }
+                  
                   resolve(accumulatedText);
                   return;
                 }
@@ -306,8 +314,14 @@ async handleStreamingResponse(response, onStream) {
                   }
                 }
               }
-            } else if (line.startsWith('event: done') || line.includes('complete')) {
               clearTimeout(streamTimeout);
+              
+              // Final validation of accumulated text
+              if (!accumulatedText || !accumulatedText.trim()) {
+                reject(new Error("Empty response from AI service. Please try again."));
+                return;
+              }
+              
               resolve(accumulatedText);
               return;
             } else if (line.startsWith('event: error')) {
