@@ -91,26 +91,19 @@ const handleSendMessage = async (content) => {
       await chatService.saveMessage(finalAiMessage);
       
     } catch (err) {
-      const errorMessage = err.message || "Failed to get AI response. Please try again.";
+const errorMessage = err.message || "Failed to get AI response. Please try again.";
       setError(errorMessage);
       console.error("Send message error:", err);
       
       // Remove the placeholder AI message on error
       setMessages(prev => prev.filter(msg => !(msg.sender === "ai" && msg.content === "")));
       
-      // Show appropriate toast message based on error length and content
-      const toastMessage = errorMessage.length > 60 ? "Failed to send message" : errorMessage;
-      toast.error(toastMessage);
-    } finally {
-setIsLoading(false);
-      setIsStreaming(false);
-      
       // Check if error is network-related and offer retry
-      if (error.message?.includes('internet') || error.message?.includes('network') || error.message?.includes('connection')) {
+      if (err.message?.includes('internet') || err.message?.includes('network') || err.message?.includes('connection')) {
         // Add a retry button to the toast for network errors
         toast.error(
           <div>
-            <div>{error.message}</div>
+            <div>{errorMessage}</div>
             <button 
               onClick={() => handleSendMessage(content)}
               className="mt-2 text-sm underline hover:no-underline"
@@ -121,8 +114,13 @@ setIsLoading(false);
           { autoClose: false }
         );
       } else {
-        toast.error(error.message);
+        // Show appropriate toast message based on error length and content
+        const toastMessage = errorMessage.length > 60 ? "Failed to send message" : errorMessage;
+        toast.error(toastMessage);
       }
+    } finally {
+      setIsLoading(false);
+      setIsStreaming(false);
     }
   };
 
