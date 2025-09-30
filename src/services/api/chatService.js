@@ -256,13 +256,13 @@ async handleStreamingResponse(response, onStream) {
 const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
 
-          for (const line of lines) {
+for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const dataStr = line.slice(6).trim();
                 if (!dataStr) continue;
                 
-                const data = JSON.parse(line.slice(6));
+                const data = JSON.parse(dataStr);
                 hasReceivedData = true;
                 
                 if (data.success === false) {
