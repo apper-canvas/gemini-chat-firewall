@@ -102,8 +102,27 @@ const handleSendMessage = async (content) => {
       const toastMessage = errorMessage.length > 60 ? "Failed to send message" : errorMessage;
       toast.error(toastMessage);
     } finally {
-      setIsLoading(false);
+setIsLoading(false);
       setIsStreaming(false);
+      
+      // Check if error is network-related and offer retry
+      if (error.message?.includes('internet') || error.message?.includes('network') || error.message?.includes('connection')) {
+        // Add a retry button to the toast for network errors
+        toast.error(
+          <div>
+            <div>{error.message}</div>
+            <button 
+              onClick={() => handleSendMessage(content)}
+              className="mt-2 text-sm underline hover:no-underline"
+            >
+              Retry
+            </button>
+          </div>,
+          { autoClose: false }
+        );
+      } else {
+        toast.error(error.message);
+      }
     }
   };
 

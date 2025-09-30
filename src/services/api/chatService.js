@@ -48,8 +48,16 @@ class ChatService {
     });
   }
 
-async sendMessage(userMessage, onStream = null) {
+async sendMessage(userMessage, onStream = null, retryCount = 0) {
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second base delay
+    
     try {
+      // Check network connectivity first
+      if (!navigator.onLine) {
+        throw new Error("No internet connection. Please check your connection and try again.");
+      }
+      
       // Wait for ApperSDK to be ready with timeout
       await this.waitForApperSDK();
       
@@ -64,12 +72,19 @@ async sendMessage(userMessage, onStream = null) {
         apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
       });
 
-      const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
+      // Add timeout to the function call
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Request timeout")), 30000); // 30 second timeout
+      });
+
+      const functionCall = apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
         body: JSON.stringify({ message: userMessage }),
         headers: {
           'Content-Type': 'application/json'
         }
       });
+
+      const result = await Promise.race([functionCall, timeoutPromise]);
       
       // Check if we have a streaming response (Response object with body stream)
       if (result && result.body && typeof result.body.getReader === 'function') {
@@ -112,10 +127,25 @@ async sendMessage(userMessage, onStream = null) {
     } catch (error) {
       console.info(`apper_info: An error was received in this function: ${import.meta.env.VITE_GEMINI_CHAT}. The error is: ${error.message}`);
       
+      // Determine if this is a retryable error
+      const isRetryable = this.isRetryableError(error);
+      
+      if (isRetryable && retryCount < maxRetries) {
+        const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
+        console.log(`Retrying request in ${delay}ms (attempt ${retryCount + 1}/${maxRetries + 1})`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.sendMessage(userMessage, onStream, retryCount + 1);
+      }
+      
       // Enhanced error handling with specific user-friendly messages
       let errorMessage = "Unable to get AI response. Please try again.";
       
-      if (error.message?.includes('ApperSDK')) {
+      if (error.message?.includes('No internet connection')) {
+        errorMessage = error.message;
+      } else if (error.message?.includes('Request timeout')) {
+        errorMessage = "Request timed out. The AI service might be busy. Please try again.";
+      } else if (error.message?.includes('ApperSDK')) {
         errorMessage = "Chat service is loading. Please wait a moment and try again.";
       } else if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('connect')) {
         errorMessage = "Connection issue. Please check your internet and try again.";
@@ -131,21 +161,53 @@ async sendMessage(userMessage, onStream = null) {
         errorMessage = error.message; // Use specific error from edge function
       }
       
+      // Add retry information to error message if max retries exceeded
+      if (isRetryable && retryCount >= maxRetries) {
+        errorMessage += ` (Tried ${maxRetries + 1} times)`;
+      }
+      
       throw new Error(errorMessage);
     }
   }
 
-  async handleStreamingResponse(response, onStream) {
+  // Helper method to determine if an error is retryable
+  isRetryableError(error) {
+    const retryablePatterns = [
+      /network/i,
+      /fetch/i,
+      /connect/i,
+      /timeout/i,
+      /502/,
+      /503/,
+      /504/,
+      /500/,
+      /ApperSDK/i,
+      /Invalid response/i
+    ];
+    
+    return retryablePatterns.some(pattern => pattern.test(error.message || ''));
+  }
+
+async handleStreamingResponse(response, onStream) {
     return new Promise((resolve, reject) => {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let accumulatedText = "";
+      let streamTimeout;
+
+      // Set up timeout for streaming response
+      const timeoutDuration = 60000; // 60 seconds for streaming
+      streamTimeout = setTimeout(() => {
+        reader.cancel();
+        reject(new Error("Streaming response timed out"));
+      }, timeoutDuration);
 
       const readChunk = async () => {
         try {
           const { done, value } = await reader.read();
           
           if (done) {
+            clearTimeout(streamTimeout);
             resolve(accumulatedText);
             return;
           }
@@ -162,6 +224,7 @@ async sendMessage(userMessage, onStream = null) {
                 const data = JSON.parse(dataStr);
                 
                 if (data.success === false) {
+                  clearTimeout(streamTimeout);
                   reject(new Error(data.error || "Streaming error occurred"));
                   return;
                 }
@@ -169,16 +232,23 @@ async sendMessage(userMessage, onStream = null) {
                 if (data.streaming && data.text) {
                   accumulatedText += data.text;
                   if (onStream) {
-                    onStream(accumulatedText);
+                    try {
+                      onStream(accumulatedText);
+                    } catch (streamError) {
+                      console.error("Error in streaming callback:", streamError);
+                      // Don't reject, just log and continue
+                    }
                   }
                 }
 
                 if (data.complete) {
+                  clearTimeout(streamTimeout);
                   resolve(accumulatedText);
                   return;
                 }
               } catch (parseError) {
                 console.error("Failed to parse streaming data:", parseError);
+                // Continue processing other lines instead of failing
               }
             }
           }
@@ -186,7 +256,15 @@ async sendMessage(userMessage, onStream = null) {
           // Continue reading next chunk
           readChunk();
         } catch (error) {
-          reject(new Error("Stream reading failed: " + error.message));
+          clearTimeout(streamTimeout);
+          // Enhanced error handling for streaming
+          if (error.name === 'AbortError') {
+            reject(new Error("Stream was cancelled"));
+          } else if (error.message?.includes('network')) {
+            reject(new Error("Network error during streaming. Please check your connection."));
+          } else {
+            reject(new Error("Stream reading failed: " + error.message));
+          }
         }
       };
 
