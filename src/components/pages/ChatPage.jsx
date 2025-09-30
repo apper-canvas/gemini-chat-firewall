@@ -10,10 +10,10 @@ import chatService from "@/services/api/chatService";
 
 const ChatPage = () => {
   const [messages, setMessages] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
-
   useEffect(() => {
     loadChatHistory();
   }, []);
@@ -31,7 +31,7 @@ const ChatPage = () => {
     }
   };
 
-  const handleSendMessage = async (content) => {
+const handleSendMessage = async (content) => {
     if (!content.trim()) return;
 
     const userMessage = {
@@ -49,31 +49,61 @@ const ChatPage = () => {
       // Save user message
       await chatService.saveMessage(userMessage);
 
-      // Get AI response
-      const aiResponse = await chatService.sendMessage(content);
-      
+      // Create placeholder AI message for streaming
       const aiMessage = {
         id: (Date.now() + 1).toString(),
-        content: aiResponse,
+        content: "",
         sender: "ai",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        streaming: true
       };
 
       setMessages(prev => [...prev, aiMessage]);
+      setIsLoading(false);
+      setIsStreaming(true);
+
+      // Get AI response with streaming
+      const aiResponse = await chatService.sendMessage(content, (streamedText) => {
+        // Update the AI message content as text streams in
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === aiMessage.id 
+              ? { ...msg, content: streamedText, streaming: true }
+              : msg
+          )
+        );
+      });
       
-      // Save AI message
-      await chatService.saveMessage(aiMessage);
+      // Update final message and mark as complete
+      const finalAiMessage = {
+        ...aiMessage,
+        content: aiResponse,
+        streaming: false
+      };
+
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === aiMessage.id ? finalAiMessage : msg
+        )
+      );
       
-} catch (err) {
+      // Save final AI message
+      await chatService.saveMessage(finalAiMessage);
+      
+    } catch (err) {
       const errorMessage = err.message || "Failed to get AI response. Please try again.";
       setError(errorMessage);
       console.error("Send message error:", err);
+      
+      // Remove the placeholder AI message on error
+      setMessages(prev => prev.filter(msg => !(msg.sender === "ai" && msg.content === "")));
       
       // Show appropriate toast message based on error length and content
       const toastMessage = errorMessage.length > 60 ? "Failed to send message" : errorMessage;
       toast.error(toastMessage);
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -133,8 +163,9 @@ const ChatPage = () => {
       )}
 
       <MessageList 
-        messages={messages} 
+messages={messages} 
         isLoading={isLoading}
+        isStreaming={isStreaming}
       />
       
       <MessageInput 

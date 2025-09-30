@@ -4,9 +4,9 @@ import { format } from "date-fns";
 import ApperIcon from "@/components/ApperIcon";
 
 const MessageBubble = ({ message, isTyping = false }) => {
-  const isUser = message?.sender === "user";
+const isUser = message?.sender === "user";
   const isAI = message?.sender === "ai";
-  
+  const isStreamingMessage = message?.streaming === true;
   const bubbleVariants = {
     initial: { opacity: 0, y: 20, scale: 0.95 },
     animate: { 
@@ -77,13 +77,18 @@ const MessageBubble = ({ message, isTyping = false }) => {
                 ? "bg-gradient-to-br from-secondary-500 to-secondary-600 text-white rounded-tr-sm"
                 : "bg-gradient-to-br from-gray-100 to-gray-200 text-text-primary rounded-tl-sm"
             }`}
-          >
+>
             <p className="text-base leading-relaxed whitespace-pre-wrap break-words">
               {message?.content}
+              {isStreamingMessage && (
+                <span className="inline-flex ml-1">
+                  <span className="animate-pulse">▊</span>
+                </span>
+              )}
             </p>
           </div>
           
-          {message?.timestamp && (
+{message?.timestamp && !isStreamingMessage && (
             <div className={`text-xs text-text-muted px-2 ${isUser ? "text-right" : "text-left"}`}>
               {format(new Date(message.timestamp), "h:mm a")}
             </div>

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import MessageBubble from "@/components/molecules/MessageBubble";
 import WelcomeMessage from "@/components/molecules/WelcomeMessage";
 
-const MessageList = ({ messages, isLoading }) => {
+const MessageList = ({ messages, isLoading, isStreaming = false }) => {
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -15,8 +15,8 @@ const MessageList = ({ messages, isLoading }) => {
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+scrollToBottom();
+  }, [messages, isLoading, isStreaming]);
 
   const containerVariants = {
     initial: { opacity: 0 },
@@ -64,7 +64,7 @@ const MessageList = ({ messages, isLoading }) => {
             </motion.div>
           ))}
           
-          {isLoading && (
+{isLoading && (
             <motion.div
               key="typing"
               initial={{ opacity: 0, y: 20 }}

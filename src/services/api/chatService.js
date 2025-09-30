@@ -48,7 +48,7 @@ class ChatService {
     });
   }
 
-async sendMessage(userMessage) {
+async sendMessage(userMessage, onStream = null) {
     try {
       // Wait for ApperSDK to be ready with timeout
       await this.waitForApperSDK();
@@ -64,14 +64,19 @@ async sendMessage(userMessage) {
         apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
       });
 
-const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
+      const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CHAT, {
         body: JSON.stringify({ message: userMessage }),
         headers: {
           'Content-Type': 'application/json'
         }
       });
       
-      // ApperSDK returns data directly, not a Response object with .json() method
+      // Check if we have a streaming response (Response object with body stream)
+      if (result && result.body && typeof result.body.getReader === 'function') {
+        return this.handleStreamingResponse(result, onStream);
+      }
+      
+      // Fallback to non-streaming response handling
       let responseData;
       
       // Handle different response formats defensively
@@ -128,6 +133,65 @@ const result = await apperClient.functions.invoke(import.meta.env.VITE_GEMINI_CH
       
       throw new Error(errorMessage);
     }
+  }
+
+  async handleStreamingResponse(response, onStream) {
+    return new Promise((resolve, reject) => {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = "";
+
+      const readChunk = async () => {
+        try {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            resolve(accumulatedText);
+            return;
+          }
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const dataStr = line.slice(6).trim();
+                if (!dataStr) continue;
+
+                const data = JSON.parse(dataStr);
+                
+                if (data.success === false) {
+                  reject(new Error(data.error || "Streaming error occurred"));
+                  return;
+                }
+
+                if (data.streaming && data.text) {
+                  accumulatedText += data.text;
+                  if (onStream) {
+                    onStream(accumulatedText);
+                  }
+                }
+
+                if (data.complete) {
+                  resolve(accumulatedText);
+                  return;
+                }
+              } catch (parseError) {
+                console.error("Failed to parse streaming data:", parseError);
+              }
+            }
+          }
+
+          // Continue reading next chunk
+          readChunk();
+        } catch (error) {
+          reject(new Error("Stream reading failed: " + error.message));
+        }
+      };
+
+      readChunk();
+    });
   }
 
   // Helper method to wait for ApperSDK to be ready
