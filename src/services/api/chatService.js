@@ -111,15 +111,39 @@ async sendMessage(userMessage, onStream = null, retryCount = 0) {
       // Fallback to non-streaming response handling
       let responseData;
       
-      // Handle different response formats defensively
+// Handle different response formats defensively with enhanced validation
       if (result && typeof result === 'object') {
         responseData = result;
       } else if (typeof result === 'string') {
+        // Trim and validate string before parsing
+        const trimmedResult = result.trim();
+        
+        // Check if result is empty or whitespace only
+        if (!trimmedResult) {
+          console.warn('Received empty response from AI service');
+          throw new Error("Empty response from AI service. Please try again.");
+        }
+        
         try {
-          responseData = JSON.parse(result);
+          // Attempt to parse as JSON
+          responseData = JSON.parse(trimmedResult);
         } catch (parseError) {
-          console.error('Failed to parse response as JSON:', parseError);
-          throw new Error("Invalid response format from AI service");
+          // Log detailed error information for debugging
+          console.error('JSON parse error:', {
+            error: parseError.message,
+            resultLength: trimmedResult.length,
+            resultPreview: trimmedResult.substring(0, 100),
+            parseErrorPosition: parseError.message.match(/position (\d+)/)?.[1]
+          });
+          
+          // Check if it looks like incomplete JSON
+          if (trimmedResult.startsWith('{') || trimmedResult.startsWith('[')) {
+            throw new Error("Incomplete response from AI service. Please try again.");
+          }
+          
+          // If not JSON format, treat as plain text response
+          console.warn('Response is not valid JSON, treating as plain text');
+          responseData = { text: trimmedResult };
         }
       } else {
         throw new Error("Unexpected response format from AI service");
