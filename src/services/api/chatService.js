@@ -1,7 +1,7 @@
 import messagesData from "@/services/mockData/messages.json";
 import React from "react";
 import Error from "@/components/ui/Error";
-import chatService from "@/apper/metadata/edge-functions/gemini-chat";
+import geminiChatFunction from "@/apper/metadata/edge-functions/gemini-chat";
 class ChatService {
   constructor() {
     this.messages = [...messagesData];
