@@ -1,6 +1,6 @@
 import messagesData from "@/services/mockData/messages.json";
 import React from "react";
-import Error from "@/components/ui/Error";
+// Note: Renamed to ErrorUI to avoid conflict with native JavaScript Error class
 // Edge function imported via Apper SDK at runtime, not bundled
 class ChatService {
   constructor() {
