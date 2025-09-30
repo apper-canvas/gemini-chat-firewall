@@ -98,25 +98,46 @@ const errorMessage = err.message || "Failed to get AI response. Please try again
       // Remove the placeholder AI message on error
       setMessages(prev => prev.filter(msg => !(msg.sender === "ai" && msg.content === "")));
       
-      // Check if error is network-related and offer retry
-      if (err.message?.includes('internet') || err.message?.includes('network') || err.message?.includes('connection')) {
-        // Add a retry button to the toast for network errors
+      // Enhanced error handling with specific user guidance
+      const isNetworkError = err.message?.includes('internet') || 
+                           err.message?.includes('network') || 
+                           err.message?.includes('connection') ||
+                           err.message?.includes('check your connection');
+      
+      const isRetryableError = isNetworkError || 
+                              err.message?.includes('timeout') ||
+                              err.message?.includes('busy') ||
+                              err.message?.includes('loading') ||
+                              err.message?.includes('Tried');
+      
+      if (isRetryableError) {
+        // Add a retry button to the toast for retryable errors
         toast.error(
           <div>
             <div>{errorMessage}</div>
             <button 
-              onClick={() => handleSendMessage(content)}
-              className="mt-2 text-sm underline hover:no-underline"
+              onClick={() => {
+                toast.dismiss(); // Close current toast
+                handleSendMessage(content);
+              }}
+              className="mt-2 text-sm underline hover:no-underline focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 rounded px-2 py-1"
             >
-              Retry
+              Try Again
             </button>
           </div>,
-          { autoClose: false }
+          { 
+            autoClose: false,
+            closeOnClick: false 
+          }
         );
       } else {
-        // Show appropriate toast message based on error length and content
-        const toastMessage = errorMessage.length > 60 ? "Failed to send message" : errorMessage;
-        toast.error(toastMessage);
+        // Show appropriate toast message for non-retryable errors
+        const toastMessage = errorMessage.length > 80 ? 
+          "AI service error. Please try again later." : 
+          errorMessage;
+        toast.error(toastMessage, {
+          autoClose: 5000
+        });
       }
     } finally {
       setIsLoading(false);

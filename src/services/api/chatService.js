@@ -162,8 +162,12 @@ async sendMessage(userMessage, onStream = null, retryCount = 0) {
       }
       
       // Add retry information to error message if max retries exceeded
-      if (isRetryable && retryCount >= maxRetries) {
+if (isRetryable && retryCount >= maxRetries) {
         errorMessage += ` (Tried ${maxRetries + 1} times)`;
+        // For network errors after retries, suggest checking connection
+        if (error.message?.includes('network') || error.message?.includes('connect') || error.message?.includes('fetch')) {
+          errorMessage += ". Please check your internet connection and try again.";
+        }
       }
       
       throw new Error(errorMessage);
