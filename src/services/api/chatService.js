@@ -260,7 +260,13 @@ for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const dataStr = line.slice(6).trim();
+                
+                // Enhanced validation before parsing
                 if (!dataStr) continue;
+                if (!dataStr.startsWith('{') && !dataStr.startsWith('[')) {
+                  console.warn("Skipping non-JSON streaming data");
+                  continue;
+                }
                 
                 const data = JSON.parse(dataStr);
                 hasReceivedData = true;
@@ -298,6 +304,11 @@ for (const line of lines) {
                   return;
                 }
 } catch (parseError) {
+                console.error("JSON parse error in stream:", {
+                  error: parseError.message,
+                  dataLength: line.length,
+                  dataPreview: line.substring(0, 100)
+                });
                 console.error("Failed to parse streaming data:", parseError, "Raw line:", line);
                 // For malformed data, try to extract any text content
                 const textMatch = line.match(/"text"\s*:\s*"([^"]*)"/) || line.match(/"([^"]*)"$/);

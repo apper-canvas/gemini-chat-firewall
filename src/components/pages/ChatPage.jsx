@@ -90,16 +90,18 @@ const handleSendMessage = async (content) => {
       // Save final AI message
       await chatService.saveMessage(finalAiMessage);
       
-    } catch (err) {
+} catch (err) {
       console.error("Chat error:", err);
       
       // Remove the failed AI message if it exists
       setMessages(prev => prev.filter(msg => msg.id !== (Date.now() + 1).toString()));
       
-      // Check if this is an empty response error (retryable)
+      // Check if this is an empty response or parse error (retryable)
       const isEmptyResponse = err.message?.includes("Empty response");
+      const isParseError = err.message?.includes("parse") || err.message?.includes("Invalid");
       const isRetryableError = 
         isEmptyResponse ||
+        isParseError ||
         err.message?.includes("timeout") ||
         err.message?.includes("network") ||
         err.message?.includes("503");
@@ -109,9 +111,16 @@ const handleSendMessage = async (content) => {
       
       // Show more helpful error message for retryable errors
       if (isRetryableError) {
+        let userMessage = errorMessage;
+        if (isEmptyResponse) {
+          userMessage = "The AI service returned an empty response. This sometimes happens - please try again.";
+        } else if (isParseError) {
+          userMessage = "Received unexpected response format. Please try again.";
+        }
+        
         toast.error(
           <div>
-            <div>{isEmptyResponse ? "The AI service returned an empty response. This sometimes happens - please try again." : errorMessage}</div>
+            <div>{userMessage}</div>
             <button 
               onClick={() => {
                 toast.dismiss();
