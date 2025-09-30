@@ -253,11 +253,10 @@ async handleStreamingResponse(response, onStream) {
             return;
           }
 
-          const chunk = decoder.decode(value, { stream: true });
+const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
 
           for (const line of lines) {
-for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const dataStr = line.slice(6).trim();
@@ -298,7 +297,7 @@ for (const line of lines) {
                   resolve(accumulatedText);
                   return;
                 }
-              } catch (parseError) {
+} catch (parseError) {
                 console.error("Failed to parse streaming data:", parseError, "Raw line:", line);
                 // For malformed data, try to extract any text content
                 const textMatch = line.match(/"text"\s*:\s*"([^"]*)"/) || line.match(/"([^"]*)"$/);
@@ -314,16 +313,6 @@ for (const line of lines) {
                   }
                 }
               }
-              clearTimeout(streamTimeout);
-              
-              // Final validation of accumulated text
-              if (!accumulatedText || !accumulatedText.trim()) {
-                reject(new Error("Empty response from AI service. Please try again."));
-                return;
-              }
-              
-              resolve(accumulatedText);
-              return;
             } else if (line.startsWith('event: error')) {
               clearTimeout(streamTimeout);
               reject(new Error("Streaming error event received"));
