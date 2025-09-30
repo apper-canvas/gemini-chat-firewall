@@ -90,26 +90,38 @@ const handleSendMessage = async (content) => {
       // Save final AI message
       await chatService.saveMessage(finalAiMessage);
       
-    } catch (err) {
-const errorMessage = err.message || "Failed to get AI response. Please try again.";
+} catch (err) {
+      const errorMessage = err.message || "Failed to get AI response. Please try again.";
       setError(errorMessage);
       console.error("Send message error:", err);
       
       // Remove the placeholder AI message on error
       setMessages(prev => prev.filter(msg => !(msg.sender === "ai" && msg.content === "")));
       
-      // Enhanced error handling with specific user guidance
-      const isNetworkError = err.message?.includes('internet') || 
-                           err.message?.includes('network') || 
-                           err.message?.includes('connection') ||
-                           err.message?.includes('check your connection');
+      // Enhanced error categorization with specific user guidance
+      const isConnectionError = err.message?.includes('internet') || 
+                               err.message?.includes('connection') ||
+                               err.message?.includes('check your connection') ||
+                               err.message?.includes('slow or unstable');
       
-      const isRetryableError = isNetworkError || 
-                              err.message?.includes('timeout') ||
-                              err.message?.includes('busy') ||
-                              err.message?.includes('loading') ||
-                              err.message?.includes('Tried');
+      const isNetworkError = err.message?.includes('network') || 
+                            err.message?.includes('fetch') ||
+                            err.message?.includes('Network Error');
       
+      const isTimeoutError = err.message?.includes('timeout') ||
+                            err.message?.includes('timed out');
+      
+      const isServiceError = err.message?.includes('busy') ||
+                            err.message?.includes('loading') ||
+                            err.message?.includes('temporarily unavailable') ||
+                            err.message?.includes('rate limit');
+      
+      const isRetryableError = isConnectionError || isNetworkError || isTimeoutError || isServiceError ||
+                              err.message?.includes('Tried') ||
+                              err.message?.includes('Stream') ||
+                              err.message?.includes('500') ||
+                              err.message?.includes('502') ||
+                              err.message?.includes('503');
       if (isRetryableError) {
         // Add a retry button to the toast for retryable errors
         toast.error(

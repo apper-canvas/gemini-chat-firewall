@@ -1,4 +1,7 @@
 import messagesData from "@/services/mockData/messages.json";
+import React from "react";
+import Error from "@/components/ui/Error";
+import chatService from "@/apper/metadata/edge-functions/gemini-chat";
 
 class ChatService {
   constructor() {
@@ -53,16 +56,34 @@ async sendMessage(userMessage, onStream = null, retryCount = 0) {
     const baseDelay = 1000; // 1 second base delay
     
     try {
-      // Check network connectivity first
+      // Enhanced network connectivity check
       if (!navigator.onLine) {
         throw new Error("No internet connection. Please check your connection and try again.");
+      }
+      
+// Test actual connectivity with a quick request
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        await fetch('https://httpbin.org/get', { 
+          method: 'HEAD', 
+          mode: 'no-cors',
+          cache: 'no-cache',
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+      } catch (connectTest) {
+        if (connectTest.name === 'AbortError' || connectTest.message?.includes('timeout')) {
+          throw new Error("Connection is slow or unstable. Please check your internet connection and try again.");
+        }
       }
       
       // Wait for ApperSDK to be ready with timeout
       await this.waitForApperSDK();
       
       const { ApperClient } = window.ApperSDK;
-      
       if (!ApperClient) {
         throw new Error("ApperSDK failed to initialize");
       }
@@ -198,6 +219,7 @@ async handleStreamingResponse(response, onStream) {
       const decoder = new TextDecoder();
       let accumulatedText = "";
       let streamTimeout;
+      let hasReceivedData = false;
 
       // Set up timeout for streaming response
       const timeoutDuration = 60000; // 60 seconds for streaming
@@ -212,6 +234,11 @@ async handleStreamingResponse(response, onStream) {
           
           if (done) {
             clearTimeout(streamTimeout);
+            // If we never received any valid data, reject
+            if (!hasReceivedData && !accumulatedText.trim()) {
+              reject(new Error("No data received from streaming response"));
+              return;
+            }
             resolve(accumulatedText);
             return;
           }
@@ -226,6 +253,7 @@ async handleStreamingResponse(response, onStream) {
                 if (!dataStr) continue;
 
                 const data = JSON.parse(dataStr);
+                hasReceivedData = true;
                 
                 if (data.success === false) {
                   clearTimeout(streamTimeout);
@@ -233,7 +261,8 @@ async handleStreamingResponse(response, onStream) {
                   return;
                 }
 
-                if (data.streaming && data.text) {
+                // Handle both streaming text and direct text
+                if (data.text) {
                   accumulatedText += data.text;
                   if (onStream) {
                     try {
@@ -245,15 +274,36 @@ async handleStreamingResponse(response, onStream) {
                   }
                 }
 
-                if (data.complete) {
+                // Handle completion signals
+                if (data.complete || data.success === true) {
                   clearTimeout(streamTimeout);
                   resolve(accumulatedText);
                   return;
                 }
               } catch (parseError) {
-                console.error("Failed to parse streaming data:", parseError);
-                // Continue processing other lines instead of failing
+                console.error("Failed to parse streaming data:", parseError, "Raw line:", line);
+                // For malformed data, try to extract any text content
+                const textMatch = line.match(/"text"\s*:\s*"([^"]*)"/) || line.match(/"([^"]*)"$/);
+                if (textMatch && textMatch[1]) {
+                  accumulatedText += textMatch[1];
+                  hasReceivedData = true;
+                  if (onStream) {
+                    try {
+                      onStream(accumulatedText);
+                    } catch (streamError) {
+                      console.error("Error in streaming callback:", streamError);
+                    }
+                  }
+                }
               }
+            } else if (line.startsWith('event: done') || line.includes('complete')) {
+              clearTimeout(streamTimeout);
+              resolve(accumulatedText);
+              return;
+            } else if (line.startsWith('event: error')) {
+              clearTimeout(streamTimeout);
+              reject(new Error("Streaming error event received"));
+              return;
             }
           }
 
@@ -264,8 +314,10 @@ async handleStreamingResponse(response, onStream) {
           // Enhanced error handling for streaming
           if (error.name === 'AbortError') {
             reject(new Error("Stream was cancelled"));
-          } else if (error.message?.includes('network')) {
+          } else if (error.message?.includes('network') || error.code === 'NETWORK_ERROR') {
             reject(new Error("Network error during streaming. Please check your connection."));
+          } else if (error.message?.includes('timeout')) {
+            reject(new Error("Connection timeout during streaming. Please try again."));
           } else {
             reject(new Error("Stream reading failed: " + error.message));
           }
