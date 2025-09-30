@@ -1,4 +1,7 @@
 import messagesData from "@/services/mockData/messages.json";
+import React from "react";
+import Error from "@/components/ui/Error";
+import chatService from "@/apper/metadata/edge-functions/gemini-chat";
 class ChatService {
   constructor() {
     this.messages = [...messagesData];
@@ -103,7 +106,7 @@ async sendMessage(userMessage, onStream = null, retryCount = 0) {
 
       const result = await Promise.race([functionCall, timeoutPromise]);
       
-      // Check if we have a streaming response (Response object with body stream)
+// Check if we have a streaming response (Response object with body stream)
       if (result && result.body && typeof result.body.getReader === 'function') {
         return this.handleStreamingResponse(result, onStream);
       }
@@ -194,21 +197,12 @@ async sendMessage(userMessage, onStream = null, retryCount = 0) {
         errorMessage = "AI service temporarily unavailable. Please try again later.";
       } else if (error.message?.includes('429') || error.message?.includes('rate limit')) {
         errorMessage = "Too many requests. Please wait a moment and try again.";
-      } else if (error.message?.includes('500') || error.message?.includes('server')) {
+} else if (error.message?.includes('500') || error.message?.includes('server')) {
         errorMessage = "AI service is experiencing issues. Please try again in a few minutes.";
       } else if (error.message?.includes('Invalid response') || error.message?.includes('parse')) {
-        errorMessage = "AI service returned an invalid response. Please try again.";
-      } else if (error.message && !error.message.includes('Failed to get AI response')) {
-        errorMessage = error.message; // Use specific error from edge function
-      }
-      
-      // Add retry information to error message if max retries exceeded
-if (isRetryable && retryCount >= maxRetries) {
-        errorMessage += ` (Tried ${maxRetries + 1} times)`;
-        // For network errors after retries, suggest checking connection
-        if (error.message?.includes('network') || error.message?.includes('connect') || error.message?.includes('fetch')) {
-          errorMessage += ". Please check your internet connection and try again.";
-        }
+        errorMessage = "Received invalid response. Please try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
       throw new Error(errorMessage);
@@ -218,21 +212,17 @@ if (isRetryable && retryCount >= maxRetries) {
   // Helper method to determine if an error is retryable
   isRetryableError(error) {
     const retryablePatterns = [
+      /timeout/i,
       /network/i,
       /fetch/i,
       /connect/i,
-      /timeout/i,
-      /502/,
-      /503/,
-      /504/,
-      /500/,
+      /ECONNREFUSED/i,
       /ApperSDK/i,
       /Invalid response/i
     ];
     
     return retryablePatterns.some(pattern => pattern.test(error.message || ''));
   }
-
 async handleStreamingResponse(response, onStream) {
     return new Promise((resolve, reject) => {
       const reader = response.body.getReader();
