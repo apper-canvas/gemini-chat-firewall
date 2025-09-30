@@ -1,7 +1,7 @@
 import messagesData from "@/services/mockData/messages.json";
 import React from "react";
 import Error from "@/components/ui/Error";
-import geminiChatFunction from "@/apper/metadata/edge-functions/gemini-chat";
+// Edge function imported via Apper SDK at runtime, not bundled
 class ChatService {
   constructor() {
     this.messages = [...messagesData];
